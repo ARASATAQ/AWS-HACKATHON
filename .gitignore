@@ -27,3 +27,14 @@ Thumbs.db
 
 # Kiro
 .kiro/
+
+# Images and Media
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.svg
+*.pdf
+*.mp4
+*.mp3
+*.wav
