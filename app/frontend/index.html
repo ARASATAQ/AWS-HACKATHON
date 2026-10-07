@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOVA-S Disaster Intelligence Map</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet CSS for Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Dashboard -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo-pulse"></div>
+                <h1>NOVA-S</h1>
+            </div>
+            <p class="subtitle">Real-time Hazard Intelligence & Live Emergency Simulation</p>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Active Hazards</h3>
+                    <div id="gdacs-count" class="stat-value">--</div>
+                </div>
+                <div class="stat-card alert-card">
+                    <h3>Units Dispatched</h3>
+                    <div id="responder-count" class="stat-value text-red">--</div>
+                </div>
+            </div>
+
+            <div class="feed-section">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                    <h2>Live Alert Feed</h2>
+                    <span class="live-badge">LIVE SIMULATION</span>
+                </div>
+                <div class="feed-list" id="feed-list">
+                    <div class="loading-pulse">Fetching intelligence...</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Map Area -->
+        <main class="map-container">
+            <div id="map"></div>
+            
+            <div class="map-overlay">
+                <div class="legend">
+                    <h4>Risk Layers</h4>
+                    <div class="legend-item"><span class="dot earthquake"></span> Earthquake / Flood (GDACS)</div>
+                    <div class="legend-item"><span class="dot anomaly"></span> ML Predicted Weather Anomaly</div>
+                    <div class="legend-item"><span class="dot normal"></span> Normal Weather</div>
+                    <hr style="border-color: rgba(255,255,255,0.1); margin: 8px 0;">
+                    <h4>Emergency Response</h4>
+                    <div class="legend-item"><span class="responder-legend ambulance">🚑</span> Ambulance Unit</div>
+                    <div class="legend-item"><span class="responder-legend police">🚓</span> Police Unit</div>
+                    <div class="legend-item"><span class="responder-legend fire">🚒</span> Fire Brigade</div>
+                </div>
+                <button class="refresh-btn" id="refresh-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21l5.67-5.67"/></svg>
+                    Refresh Data
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Custom JS -->
+    <script src="script.js"></script>
+</body>
+</html>

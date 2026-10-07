@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOVA-S Emergency Operations Center</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            50: '#f9fafb',
+                            700: '#374151',
+                            800: '#1f2937',
+                            900: '#111827'
+                        }
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #111827;
+            color: #f9fafb;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+
+        /* Pulsing Red Marker for Map */
+        .pulse-red {
+            background: rgba(239, 68, 68, 0.8);
+            border-radius: 50%;
+            box-shadow: 0 0 0 rgba(239, 68, 68, 0.4);
+            animation: pulse-ring 2s infinite;
+            width: 14px !important;
+            height: 14px !important;
+            margin-left: -7px !important;
+            margin-top: -7px !important;
+            border: 2px solid #fff;
+        }
+
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* Leaflet Dark Theme Overrides */
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background: #1f2937;
+            color: #f9fafb;
+        }
+        .leaflet-container a.leaflet-popup-close-button {
+            color: #9ca3af;
+        }
+        
+        /* Toggle Switch */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #22c55e;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #22c55e;
+        }
+        .toggle-checkbox:not(:checked) {
+            border-color: #f97316;
+        }
+        .toggle-checkbox:not(:checked) + .toggle-label {
+            background-color: #f97316;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+    <!-- Header -->
+    <header class="fixed top-0 w-full bg-gray-800 border-b border-gray-700 shadow-md z-50 h-16 flex items-center justify-between px-6">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-blue-500 rounded flex items-center justify-center text-white font-bold text-xl">
+                <i class="fa-solid fa-satellite-dish"></i>
+            </div>
+            <h1 class="text-xl font-bold tracking-wider hidden sm:block">NOVA-S Emergency Operations Center</h1>
+        </div>
+        
+        <div class="flex items-center justify-center">
+            <div class="text-lg font-mono text-gray-300 tracking-widest bg-gray-900 px-4 py-1 rounded shadow-inner" id="clock">
+                --:--:--
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <span id="mode-indicator" class="px-3 py-1 text-sm font-semibold rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                Demo Mode
+            </span>
+            <div class="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
+                <input type="checkbox" name="toggle" id="mode-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 transition-transform duration-200 ease-in-out"/>
+                <label for="mode-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer transition-colors duration-200 ease-in-out"></label>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content wrapper to account for fixed header -->
+    <main class="pt-20 px-4 pb-12 flex-1 flex flex-col gap-6 w-full max-w-[1920px] mx-auto">
+        
+        <!-- Stats Bar -->
+        <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4 w-full" id="stats-container">
+            <!-- Rendered via JS -->
+        </div>
+
+        <!-- Layout Grid -->
+        <div class="flex flex-col lg:flex-row gap-6 w-full h-full flex-1">
+            
+            <!-- Left Column: Map & Simulations -->
+            <div class="flex flex-col gap-4 w-full lg:w-3/5">
+                <!-- Map Container -->
+                <div class="bg-gray-800 rounded-lg p-2 shadow-lg border border-gray-700 relative flex-1 flex flex-col">
+                    <div class="flex justify-between items-center px-2 py-2 border-b border-gray-700 mb-2">
+                        <h2 class="text-lg font-semibold"><i class="fa-solid fa-map-location-dot mr-2 text-blue-400"></i>Live Situation Map</h2>
+                        <button onclick="initDashboard()" class="text-sm text-gray-400 hover:text-white transition-colors" title="Force Refresh">
+                            <i class="fa-solid fa-rotate-right"></i>
+                        </button>
+                    </div>
+                    <div id="map" class="w-full h-[500px] lg:h-[600px] rounded z-0"></div>
+                </div>
+
+                <!-- Demo Simulation Bar -->
+                <div id="demo-bar" class="bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700">
+                    <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Simulation Controls (Demo Mode)</h3>
+                    <div class="flex flex-wrap gap-3">
+                        <button onclick="simulateEvent('flood')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow flex items-center gap-2">
+                            <span>🌊</span> Simulate 50mm/h Cloudburst
+                        </button>
+                        <button onclick="simulateEvent('earthquake')" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow flex items-center gap-2">
+                            <span>🏔️</span> Simulate 6.2M Earthquake
+                        </button>
+                        <button onclick="simulateEvent('tsunami')" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow flex items-center gap-2">
+                            <span>🌊</span> Simulate Tsunami Alert
+                        </button>
+                        <button onclick="simulateEvent('sos')" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow flex items-center gap-2">
+                            <span>🆘</span> Inject Test Citizen SOS
+                        </button>
+                        <button onclick="clearDemo()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors shadow flex items-center gap-2 ml-auto">
+                            <i class="fa-solid fa-trash"></i> Clear Demo Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Queues and Hospitals -->
+            <div class="flex flex-col gap-6 w-full lg:w-2/5">
+                
+                <!-- Rescue Priority Queue -->
+                <div class="bg-gray-800 rounded-lg shadow-lg border border-gray-700 flex flex-col h-[400px] lg:h-[500px]">
+                    <div class="px-4 py-3 border-b border-gray-700 flex justify-between items-center bg-gray-800 rounded-t-lg">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fa-solid fa-truck-medical text-red-500 mr-2 animate-pulse"></i> 
+                            Rescue Priority Queue
+                        </h2>
+                        <span id="queue-count-badge" class="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">0</span>
+                    </div>
+                    <div id="rescue-queue" class="overflow-y-auto p-4 space-y-4 flex-1 bg-gray-900/50">
+                        <!-- Queue items rendered by JS -->
+                        <div class="text-center text-gray-500 py-8 italic">Loading active incidents...</div>
+                    </div>
+                </div>
+
+                <!-- Hospital Network -->
+                <div class="bg-gray-800 rounded-lg shadow-lg border border-gray-700 flex flex-col flex-1">
+                    <div class="px-4 py-3 border-b border-gray-700 flex justify-between items-center bg-gray-800 rounded-t-lg">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fa-solid fa-square-h text-blue-400 mr-2"></i> 
+                            Hospital Network
+                        </h2>
+                    </div>
+                    <div id="hospital-status" class="overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[300px]">
+                        <!-- Hospital items rendered by JS -->
+                        <div class="text-center text-gray-500 py-8 italic md:col-span-2">Loading hospital data...</div>
+                    </div>
+                    <div class="p-4 border-t border-gray-700 bg-gray-800 rounded-b-lg mt-auto">
+                        <button onclick="openBroadcastModal()" class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-bold shadow-lg transition-colors flex justify-center items-center gap-2 uppercase tracking-wide">
+                            <i class="fa-solid fa-bullhorn"></i> Broadcast Emergency to All Hospitals
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 border-t border-gray-800 py-4 px-6 text-center text-xs text-gray-500 mt-auto">
+        NOVA-S Disaster Management System v2.0 | Powered by AWS + Amazon Bedrock
+    </footer>
+
+    <!-- Broadcast Modal Overlay -->
+    <div id="broadcast-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4">
+        <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-700 flex justify-between items-center bg-red-900/20">
+                <h3 class="text-xl font-bold text-red-500 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Emergency Broadcast
+                </h3>
+                <button onclick="closeBroadcastModal()" class="text-gray-400 hover:text-white transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 flex flex-col gap-4">
+                <p class="text-sm text-gray-300">Alert all network hospitals of an incoming mass casualty event to prepare beds, triage, and supplies.</p>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Estimated Victim Count</label>
+                    <input type="number" id="broadcast-victims" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500" placeholder="e.g. 50" min="1">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Primary Hazard Type</label>
+                    <select id="broadcast-hazard" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500">
+                        <option value="Flood/Water Rescue">Flood / Water Rescue</option>
+                        <option value="Earthquake/Collapse">Earthquake / Structural Collapse</option>
+                        <option value="Fire/Burns">Fire / Burns</option>
+                        <option value="Chemical/Bio">Chemical / Biological</option>
+                        <option value="General Trauma">General Trauma / Unknown</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Additional Notes</label>
+                    <textarea id="broadcast-notes" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500" placeholder="Optional details for emergency rooms..."></textarea>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-700 bg-gray-900/50 flex justify-end gap-3">
+                <button onclick="closeBroadcastModal()" class="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700 rounded transition-colors">Cancel</button>
+                <button onclick="submitBroadcast()" class="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded shadow transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-satellite-dish"></i> Send Alert
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Preview Modal -->
+    <div id="image-modal" class="fixed inset-0 bg-black/90 z-[100] hidden flex flex-col items-center justify-center p-4">
+        <button onclick="closeImageModal()" class="absolute top-6 right-6 text-gray-400 hover:text-white transition-colors bg-gray-800/50 rounded-full p-2 h-10 w-10 flex items-center justify-center">
+            <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+        <div class="max-w-4xl w-full max-h-[80vh] flex items-center justify-center">
+            <img id="preview-image" src="" alt="Incident Photo" class="max-w-full max-h-[80vh] object-contain rounded border border-gray-700 shadow-2xl">
+        </div>
+        <div id="preview-caption" class="mt-4 text-white bg-gray-900/80 px-6 py-3 rounded-lg border border-gray-700 max-w-4xl text-center shadow-lg"></div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-6 right-6 z-[200] flex flex-col gap-3 pointer-events-none"></div>
+
+    <script>
+        // ==========================================
+        // STATE VARIABLES
+        // ==========================================
+        let map, hazardLayer, citizenLayer, hospitalLayer, incidentLayer;
+        let isDemoMode = false;
+        let refreshInterval = null;
+        let lastIncidents = [];
+        const API_BASE = ''; // Assumes same origin
+
+        // Default New Delhi coordinates
+        const DEFAULT_CENTER = [28.6139, 77.2090];
+        const DEFAULT_ZOOM = 11;
+
+        // ==========================================
+        // INITIALIZATION
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Setup Map
+            initMap();
+            
+            // Setup Clock
+            setInterval(updateClock, 1000);
+            updateClock();
+
+            // Fetch actual initial mode from backend
+            try {
+                const healthRes = await fetch(`${API_BASE}/health`);
+                const healthData = await healthRes.json();
+                isDemoMode = (healthData.mode === 'demo');
+            } catch (e) {
+                console.error('Failed to get initial state', e);
+            }
+            
+            // Setup Mode Toggle Listener
+            const toggle = document.getElementById('mode-toggle');
+            toggle.addEventListener('change', (e) => {
+                isDemoMode = !e.target.checked;
+                toggleModeUI();
+                toggleModeAPI(isDemoMode);
+            });
+            
+            // Initial toggle UI state
+            toggle.checked = !isDemoMode;
+            toggleModeUI();
+
+            // Initial Data Fetch
+            initDashboard();
+            
+            // Fix map rendering in flex container
+            setTimeout(() => { map.invalidateSize(); }, 500);
+        });
+
+        function initMap() {
+            map = L.map('map').setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+            
+            // CartoDB Dark Matter tile layer
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(map);
+
+            // Initialize layer groups
+            hazardLayer = L.layerGroup().addTo(map);
+            citizenLayer = L.layerGroup().addTo(map);
+            hospitalLayer = L.layerGroup().addTo(map);
+            incidentLayer = L.layerGroup().addTo(map);
+        }
+
+        function initDashboard() {
+            // Clear existing interval if any
+            if (refreshInterval) clearInterval(refreshInterval);
+
+            // Fetch all data immediately
+            fetchAllData();
+
+            // Set up 10-second auto-refresh
+            refreshInterval = setInterval(fetchAllData, 10000);
+        }
+
+        async function fetchAllData() {
+            try {
+                await Promise.all([
+                    fetchStats(),
+                    fetchIncidents(),
+                    fetchCitizens(),
+                    fetchHazardZones(),
+                    fetchHospitals()
+                ]);
+            } catch (error) {
+                console.error("Error during auto-refresh data fetch:", error);
+            }
+        }
+
+        // ==========================================
+        // DATA FETCHING & RENDERING
+        // ==========================================
+        
+        async function fetchStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/stats`);
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.json();
+                
+                // Fallback for empty data
+                const stats = data || {
+                    totalCitizens: 0, citizensSafe: 0, citizensDanger: 0, citizensRescued: 0,
+                    activeIncidents: 0, activeHazards: 0, hospitals: 0, availableBeds: 0
+                };
+
+                const container = document.getElementById('stats-container');
+                container.innerHTML = `
+                    ${createStatCard('Total Citizens', stats.totalCitizens || 0, 'fa-users', 'text-blue-400')}
+                    ${createStatCard('Citizens Safe', stats.citizensSafe || 0, 'fa-shield-heart', 'text-green-500')}
+                    ${createStatCard('In Danger', stats.citizensDanger || 0, 'fa-triangle-exclamation', 'text-red-500 animate-pulse')}
+                    ${createStatCard('Rescued', stats.citizensRescued || 0, 'fa-hand-holding-medical', 'text-emerald-400')}
+                    ${createStatCard('Active Incidents', stats.activeIncidents || 0, 'fa-fire-flame-curved', 'text-orange-500')}
+                    ${createStatCard('Hazard Zones', stats.activeHazards || 0, 'fa-radiation', 'text-red-400')}
+                    ${createStatCard('Hospitals', stats.hospitals || 0, 'fa-truck-medical', 'text-gray-300')}
+                    ${createStatCard('Available Beds', stats.availableBeds || 0, 'fa-bed-pulse', stats.availableBeds < 50 ? 'text-red-400' : 'text-green-400')}
+                `;
+            } catch (error) {
+                console.error("Failed to fetch stats:", error);
+            }
+        }
+
+        function createStatCard(label, value, iconClass, colorClass) {
+            return `
+                <div class="bg-gray-800 rounded-lg p-4 shadow border border-gray-700 flex items-center justify-between hover:bg-gray-700 transition-colors">
+                    <div>
+                        <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">${label}</p>
+                        <h3 class="text-2xl font-bold text-white">${value.toLocaleString()}</h3>
+                    </div>
+                    <div class="w-10 h-10 rounded-full bg-gray-900/50 flex items-center justify-center shadow-inner">
+                        <i class="fa-solid ${iconClass} ${colorClass} text-xl"></i>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function fetchIncidents() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/incidents`);
+                if (!response.ok) throw new Error('Network response was not ok');
+                let incidents = await response.json();
+                
+                if (!Array.isArray(incidents)) incidents = [];
+                
+                // Sort by severity score descending
+                incidents.sort((a, b) => (b.severity_score || 0) - (a.severity_score || 0));
+                
+                // Render Queue
+                const queueContainer = document.getElementById('rescue-queue');
+                const badge = document.getElementById('queue-count-badge');
+                
+                badge.textContent = incidents.length;
+                
+                if (incidents.length === 0) {
+                    queueContainer.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-gray-500 gap-3"><i class="fa-solid fa-check-circle text-4xl text-green-800"></i><p>No active incidents.</p></div>`;
+                } else {
+                    queueContainer.innerHTML = incidents.map(inc => createIncidentCard(inc)).join('');
+                }
+
+                // Render Map Markers
+                incidentLayer.clearLayers();
+                incidents.forEach(inc => {
+                    if (inc.lat && inc.lng) {
+                        const iconHtml = `<div class="text-red-500 text-2xl drop-shadow-md animate-bounce"><i class="fa-solid fa-triangle-exclamation"></i></div>`;
+                        const icon = L.divIcon({ html: iconHtml, className: '', iconSize: [24, 24], iconAnchor: [12, 24] });
+                        
+                        L.marker([inc.lat, inc.lng], { icon: icon })
+                            .bindPopup(`
+                                <strong>Incident #${inc.id}</strong><br>
+                                Type: ${inc.hazard_type}<br>
+                                Severity: ${inc.severity}<br>
+                                Status: ${inc.status || 'PENDING'}
+                            `)
+                            .addTo(incidentLayer);
+                    }
+                });
+
+            } catch (error) {
+                console.error("Failed to fetch incidents:", error);
+                document.getElementById('rescue-queue').innerHTML = `<div class="text-red-400 text-center py-4">Error loading incidents.</div>`;
+            }
+        }
+
+        function createIncidentCard(inc) {
+            const sevInfo = getSeverityInfo(inc.severity);
+            const status = inc.status || 'PENDING';
+            const isDispatched = status === 'DISPATCHED';
+            const isRescued = status === 'RESCUED';
+            
+            let borderClass = sevInfo.border;
+            if (isDispatched) borderClass = 'border-l-yellow-500';
+            if (isRescued) borderClass = 'border-l-green-500 opacity-60';
+
+            const maskedPhone = inc.phone ? inc.phone.replace(/.(?=.{4})/g, '*') : 'Unknown';
+            const hazardEmoji = getHazardIcon(inc.hazard_type);
+            const stars = getSeverityStars(inc.severity_score || 0);
+            
+            return `
+                <div class="bg-gray-800 rounded-lg p-4 border-l-4 ${borderClass} shadow-md relative group hover:bg-gray-700 transition-colors">
+                    
+                    ${isDispatched ? `<div class="absolute -top-2 -right-2 bg-yellow-500 text-yellow-900 text-[10px] font-bold px-2 py-1 rounded-full shadow-lg uppercase tracking-widest z-10 animate-pulse">Rescue En Route</div>` : ''}
+                    ${isRescued ? `<div class="absolute -top-2 -right-2 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg uppercase tracking-widest z-10">Rescued</div>` : ''}
+
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${sevInfo.bg} ${sevInfo.text} uppercase tracking-wider">${inc.severity || 'UNKNOWN'}</span>
+                            <span class="text-xs text-gray-400 bg-gray-900 px-2 py-0.5 rounded-full border border-gray-700">${hazardEmoji} ${inc.hazard_type || 'Unknown Hazard'}</span>
+                        </div>
+                        <div class="text-xs text-gray-500 font-mono" title="Lat/Lng: ${inc.lat}, ${inc.lng}">
+                            <i class="fa-solid fa-location-crosshairs mr-1"></i> ${inc.lat?.toFixed(4)}, ${inc.lng?.toFixed(4)}
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center mb-3">
+                        <div class="text-sm font-mono text-gray-300">
+                            <i class="fa-solid fa-phone text-gray-500 mr-1"></i> ${maskedPhone}
+                        </div>
+                        <div class="text-yellow-400 text-sm" title="AI Severity Score: ${inc.severity_score}/10">
+                            ${stars}
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-900/50 p-2 rounded text-xs text-gray-300 border border-gray-700 mb-3 italic">
+                        <i class="fa-solid fa-robot text-purple-400 mr-1" title="Bedrock AI Analysis"></i> 
+                        ${inc.findings || 'No AI analysis findings available.'}
+                    </div>
+
+                    <div class="flex justify-between items-center mt-2">
+                        <div class="text-[10px] text-gray-500">
+                            <i class="fa-regular fa-clock mr-1"></i> ${formatTime(inc.timestamp)}
+                        </div>
+                        <div class="flex gap-2">
+                            ${inc.photo_url ? `
+                            <button onclick="openImageModal('${inc.photo_url}', '${inc.findings?.replace(/'/g, "\\'")}')" class="bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white px-3 py-1.5 rounded text-xs font-semibold transition-colors border border-blue-600/30">
+                                <i class="fa-solid fa-camera"></i> Photo
+                            </button>
+                            ` : ''}
+                            
+                            ${!isRescued ? `
+                                ${!isDispatched ? `
+                                <button onclick="dispatchRescue('${inc.id}')" class="bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded text-xs font-semibold shadow transition-colors">
+                                    <i class="fa-solid fa-helicopter"></i> Dispatch
+                                </button>
+                                ` : `
+                                <button onclick="markRescued('${inc.id}')" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded text-xs font-semibold shadow transition-colors">
+                                    <i class="fa-solid fa-check"></i> Rescued
+                                </button>
+                                `}
+                            ` : `
+                                <button disabled class="bg-gray-700 text-gray-500 px-3 py-1.5 rounded text-xs font-semibold cursor-not-allowed border border-gray-600">
+                                    Resolved
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function fetchCitizens() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/citizens`);
+                if (!response.ok) throw new Error('Network response was not ok');
+                const citizens = await response.json();
+                
+                if (!Array.isArray(citizens)) return;
+                
+                citizenLayer.clearLayers();
+                
+                citizens.forEach(cit => {
+                    if (cit.lat && cit.lng) {
+                        let iconHtml, className, size, anchor;
+                        
+                        switch(cit.status) {
+                            case 'IN_DANGER':
+                                className = 'pulse-red';
+                                iconHtml = '';
+                                size = [14, 14];
+                                anchor = [7, 7];
+                                break;
+                            case 'UNDERGOING_RESCUE':
+                                className = 'bg-yellow-400 rounded-full border-2 border-white shadow-md';
+                                iconHtml = '';
+                                size = [12, 12];
+                                anchor = [6, 6];
+                                break;
+                            case 'RESCUED':
+                                className = 'bg-emerald-500 rounded-full border-2 border-white shadow-md';
+                                iconHtml = '';
+                                size = [12, 12];
+                                anchor = [6, 6];
+                                break;
+                            case 'SAFE':
+                            default:
+                                className = 'bg-green-500 rounded-full opacity-60';
+                                iconHtml = '';
+                                size = [6, 6];
+                                anchor = [3, 3];
+                        }
+
+                        const icon = L.divIcon({
+                            html: iconHtml,
+                            className: className,
+                            iconSize: size,
+                            iconAnchor: anchor
+                        });
+                        
+                        L.marker([cit.lat, cit.lng], { icon: icon })
+                            .bindPopup(`Citizen Status: <strong>${cit.status || 'SAFE'}</strong>`)
+                            .addTo(citizenLayer);
+                    }
+                });
+            } catch (error) {
+                console.error("Failed to fetch citizens:", error);
+            }
+        }
+
+        async function fetchHazardZones() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/hazard-zones`);
+                if (!response.ok) throw new Error('Network response was not ok');
+                const zones = await response.json();
+                
+                if (!Array.isArray(zones)) return;
+                
+                hazardLayer.clearLayers();
+                
+                zones.forEach(zone => {
+                    if (zone.lat && zone.lng && zone.radius) {
+                        let color;
+                        switch(zone.intensity) {
+                            case 'RED': color = '#ef4444'; break;
+                            case 'YELLOW': color = '#eab308'; break;
+                            case 'GREEN': color = '#22c55e'; break;
+                            default: color = '#ef4444';
+                        }
+                        
+                        L.circle([zone.lat, zone.lng], {
+                            color: color,
+                            fillColor: color,
+                            fillOpacity: 0.2,
+                            weight: 2,
+                            radius: zone.radius
+                        })
+                        .bindPopup(`
+                            <strong>${zone.type || 'Hazard Zone'}</strong><br>
+                            Intensity: ${zone.intensity}<br>
+                            ${zone.description || ''}
+                        `)
+                        .addTo(hazardLayer);
+                    }
+                });
+            } catch (error) {
+                console.error("Failed to fetch hazard zones:", error);
+            }
+        }
+
+        async function fetchHospitals() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/hospitals`);
+                if (!response.ok) throw new Error('Network response was not ok');
+                const hospitals = await response.json();
+                
+                if (!Array.isArray(hospitals)) return;
+                
+                const container = document.getElementById('hospital-status');
+                
+                if (hospitals.length === 0) {
+                    container.innerHTML = `<div class="text-center text-gray-500 py-4 col-span-2">No hospitals registered.</div>`;
+                } else {
+                    container.innerHTML = hospitals.map(h => {
+                        const beds = h.available_beds || 0;
+                        let bedColor = 'text-green-400';
+                        if (beds < 5) bedColor = 'text-red-500';
+                        else if (beds < 15) bedColor = 'text-yellow-400';
+
+                        return `
+                            <div class="bg-gray-900 border border-gray-700 rounded p-3 shadow hover:border-gray-600 transition-colors">
+                                <h4 class="text-sm font-bold text-gray-200 mb-1 truncate" title="${h.name}">${h.name}</h4>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-xs text-gray-500"><i class="fa-solid fa-phone mr-1"></i> ${h.phone || 'N/A'}</span>
+                                    <span class="text-sm font-bold ${bedColor} bg-gray-800 px-2 py-0.5 rounded shadow-inner" title="Available Beds">
+                                        <i class="fa-solid fa-bed mr-1"></i> ${beds}
+                                    </span>
+                                </div>
+                                <div class="text-[10px] text-gray-400 uppercase tracking-wider truncate" title="${h.specialties || 'General'}">
+                                    ${h.specialties || 'General Medicine'}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                // Map Markers
+                hospitalLayer.clearLayers();
+                hospitals.forEach(h => {
+                    if (h.lat && h.lng) {
+                        const iconHtml = `<div class="bg-white text-red-600 rounded-sm w-6 h-6 flex items-center justify-center border border-gray-400 shadow-md"><i class="fa-solid fa-plus text-sm"></i></div>`;
+                        const icon = L.divIcon({ html: iconHtml, className: '', iconSize: [24, 24], iconAnchor: [12, 12] });
+                        
+                        L.marker([h.lat, h.lng], { icon: icon })
+                            .bindPopup(`
+                                <strong>${h.name}</strong><br>
+                                Available Beds: ${h.available_beds}<br>
+                                Phone: ${h.phone || 'N/A'}
+                            `)
+                            .addTo(hospitalLayer);
+                    }
+                });
+
+            } catch (error) {
+                console.error("Failed to fetch hospitals:", error);
+                document.getElementById('hospital-status').innerHTML = `<div class="text-red-400 text-center py-4 col-span-2">Error loading hospital network.</div>`;
+            }
+        }
+
+        // ==========================================
+        // ACTIONS & EVENTS
+        // ==========================================
+
+        function toggleModeUI() {
+            const indicator = document.getElementById('mode-indicator');
+            const demoBar = document.getElementById('demo-bar');
+            
+            if (isDemoMode) {
+                indicator.textContent = 'Demo Mode';
+                indicator.className = 'px-3 py-1 text-sm font-semibold rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 transition-all';
+                demoBar.style.display = 'block';
+            } else {
+                indicator.textContent = 'Real Ops Mode';
+                indicator.className = 'px-3 py-1 text-sm font-semibold rounded-full bg-green-500/20 text-green-400 border border-green-500/30 transition-all shadow-[0_0_10px_rgba(34,197,94,0.3)]';
+                demoBar.style.display = 'none';
+            }
+        }
+
+        async function toggleModeAPI(toRealMode) {
+            try {
+                // If the backend accepts a mode toggle POST
+                const modeStr = toRealMode ? 'real' : 'demo';
+                const response = await fetch(`${API_BASE}/api/admin/toggle-mode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: modeStr })
+                });
+                if (response.ok) {
+                    showToast(`Switched to ${toRealMode ? 'Real Operations' : 'Demo'} mode`, 'info');
+                    initDashboard(); // refresh all data immediately
+                } else {
+                    showToast('Failed to switch mode on server.', 'error');
+                }
+            } catch (error) {
+                console.error("Toggle error:", error);
+                showToast('API error toggling mode (Demo fallback).', 'warning');
+            }
+        }
+
+        async function simulateEvent(type) {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/simulate/${type}`, { method: 'POST' });
+                if (response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    showToast(`Simulated: ${type.toUpperCase()}`, 'success');
+                    initDashboard();
+                } else {
+                    showToast(`Simulation failed: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                console.error("Simulation error:", error);
+                // Fake success for UI preview if API doesn't exist
+                showToast(`Simulation trigger sent (${type})`, 'info');
+                initDashboard();
+            }
+        }
+
+        async function dispatchRescue(incidentId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/dispatch/${incidentId}`, { method: 'POST' });
+                if (response.ok) {
+                    showToast(`Rescue dispatched for incident #${incidentId}`, 'success');
+                    fetchIncidents(); // Refresh queue
+                } else {
+                    showToast(`Dispatch failed.`, 'error');
+                }
+            } catch (error) {
+                console.error("Dispatch error:", error);
+                showToast(`Rescue dispatched (Offline preview)`, 'success');
+            }
+        }
+
+        async function markRescued(incidentId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/mark-rescued/${incidentId}`, { method: 'POST' });
+                if (response.ok) {
+                    showToast(`Incident #${incidentId} marked as Rescued!`, 'success');
+                    fetchIncidents(); // Refresh queue
+                    fetchStats(); // Update counters
+                } else {
+                    showToast(`Action failed.`, 'error');
+                }
+            } catch (error) {
+                console.error("Mark rescued error:", error);
+                showToast(`Incident resolved (Offline preview)`, 'success');
+            }
+        }
+
+        async function clearDemo() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/clear-demo`, { method: 'POST' });
+                if (response.ok) {
+                    showToast(`Demo data cleared successfully.`, 'success');
+                    initDashboard();
+                } else {
+                    showToast(`Failed to clear demo data.`, 'error');
+                }
+            } catch (error) {
+                console.error("Clear demo error:", error);
+                showToast(`Clear demo data trigger sent`, 'info');
+            }
+        }
+
+        // ==========================================
+        // MODALS
+        // ==========================================
+
+        function openBroadcastModal() {
+            document.getElementById('broadcast-modal').classList.remove('hidden');
+        }
+
+        function closeBroadcastModal() {
+            document.getElementById('broadcast-modal').classList.add('hidden');
+            // reset form
+            document.getElementById('broadcast-victims').value = '';
+            document.getElementById('broadcast-notes').value = '';
+        }
+
+        async function submitBroadcast() {
+            const victims = document.getElementById('broadcast-victims').value;
+            const hazard = document.getElementById('broadcast-hazard').value;
+            const notes = document.getElementById('broadcast-notes').value;
+            
+            if (!victims) {
+                showToast('Please enter an estimated victim count.', 'warning');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/broadcast-hospital`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ victims, hazard, notes })
+                });
+                
+                if (response.ok) {
+                    showToast(`Emergency broadcast sent to all hospitals!`, 'success');
+                    closeBroadcastModal();
+                } else {
+                    showToast(`Broadcast failed to send.`, 'error');
+                }
+            } catch (error) {
+                console.error("Broadcast error:", error);
+                showToast(`Emergency broadcast sent (Offline preview)`, 'success');
+                closeBroadcastModal();
+            }
+        }
+
+        function openImageModal(url, findings) {
+            const modal = document.getElementById('image-modal');
+            const img = document.getElementById('preview-image');
+            const caption = document.getElementById('preview-caption');
+            
+            img.src = url;
+            img.onerror = () => { img.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48dGV4dCB5PSI1MCIgZm9udC1mYW1pbHk9ImFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5Ij5JbWFnZSBOb3QgRm91bmQ8L3RleHQ+PC9zdmc+'; };
+            caption.innerHTML = `<i class="fa-solid fa-robot text-purple-400 mr-2"></i><strong>AI Analysis:</strong> ${findings || 'No analysis text available.'}`;
+            
+            modal.classList.remove('hidden');
+        }
+
+        function closeImageModal() {
+            document.getElementById('image-modal').classList.add('hidden');
+            document.getElementById('preview-image').src = '';
+        }
+
+        // ==========================================
+        // UTILITIES
+        // ==========================================
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bgClass, icon;
+            switch(type) {
+                case 'success': 
+                    bgClass = 'bg-green-600/90 border-green-500 text-white'; 
+                    icon = 'fa-circle-check'; 
+                    break;
+                case 'error': 
+                    bgClass = 'bg-red-600/90 border-red-500 text-white'; 
+                    icon = 'fa-circle-exclamation'; 
+                    break;
+                case 'warning': 
+                    bgClass = 'bg-yellow-500/90 border-yellow-400 text-gray-900'; 
+                    icon = 'fa-triangle-exclamation'; 
+                    break;
+                case 'info': 
+                default:
+                    bgClass = 'bg-blue-600/90 border-blue-500 text-white'; 
+                    icon = 'fa-circle-info'; 
+            }
+
+            toast.className = `flex items-center gap-3 px-4 py-3 rounded shadow-lg border backdrop-blur-sm transform transition-all duration-300 translate-y-10 opacity-0 ${bgClass}`;
+            toast.innerHTML = `<i class="fa-solid ${icon} text-lg"></i><span class="font-medium text-sm">${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-10', 'opacity-0');
+            });
+
+            // Remove after 3s
+            setTimeout(() => {
+                toast.classList.add('translate-y-10', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function formatTime(isoString) {
+            if (!isoString) return 'Unknown Time';
+            try {
+                const date = new Date(isoString);
+                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            } catch(e) {
+                return isoString;
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            // Format: YYYY-MM-DD HH:MM:SS
+            const dateStr = now.toISOString().split('T')[0];
+            const timeStr = now.toTimeString().split(' ')[0];
+            document.getElementById('clock').textContent = `${dateStr} ${timeStr}`;
+        }
+
+        function getSeverityInfo(level) {
+            const upLevel = (level || '').toUpperCase();
+            if (upLevel === 'CRITICAL' || upLevel === 'HIGH') return { bg: 'bg-red-900/40', text: 'text-red-400', border: 'border-l-red-600' };
+            if (upLevel === 'MODERATE' || upLevel === 'MEDIUM') return { bg: 'bg-yellow-900/40', text: 'text-yellow-400', border: 'border-l-yellow-500' };
+            if (upLevel === 'LOW' || upLevel === 'MINOR') return { bg: 'bg-green-900/40', text: 'text-green-400', border: 'border-l-green-500' };
+            return { bg: 'bg-gray-800', text: 'text-gray-400', border: 'border-l-gray-600' };
+        }
+
+        function getSeverityStars(score) {
+            const s = Math.round(score); // 1 to 5 scale expected? Let's assume out of 10 mapped to 5
+            const starCount = Math.min(5, Math.max(1, Math.ceil(s / 2))); // mapping 1-10 to 1-5
+            let starsHtml = '';
+            for (let i = 0; i < 5; i++) {
+                if (i < starCount) starsHtml += '<i class="fa-solid fa-star"></i>';
+                else starsHtml += '<i class="fa-regular fa-star text-gray-600"></i>';
+            }
+            return starsHtml;
+        }
+
+        function getHazardIcon(type) {
+            const t = (type || '').toLowerCase();
+            if (t.includes('flood') || t.includes('water') || t.includes('tsunami')) return '🌊';
+            if (t.includes('earthquake') || t.includes('collapse')) return '🏢';
+            if (t.includes('fire')) return '🔥';
+            if (t.includes('medical') || t.includes('trauma')) return '🩸';
+            if (t.includes('chemical') || t.includes('gas')) return '☣️';
+            return '⚠️';
+        }
+    </script>
+</body>
+</html>

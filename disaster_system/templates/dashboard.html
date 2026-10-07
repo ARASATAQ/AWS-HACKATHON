@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NOVA-S Command Center</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+    <!-- Mapbox GL JS -->
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --bg:      #0a0a0f;
+            --surf:    #13131a;
+            --surf2:   #1c1c26;
+            --border:  rgba(255,255,255,0.07);
+            --text:    #e8e8f0;
+            --muted:   #6b6b80;
+            --red:     #ff3b30;
+            --orange:  #ff9500;
+            --yellow:  #ffd60a;
+            --green:   #30d158;
+            --blue:    #0a84ff;
+            --purple:  #bf5af2;
+            --cyan:    #64d2ff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg); color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            overflow: hidden; display: flex; height: 100vh;
+        }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        /* ── Sidebar ── */
+        .sidebar { width: 258px; background: var(--surf); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+        .logo { padding: 22px 18px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+        .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg,var(--red),var(--orange)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; }
+        .logo-name  { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+        .logo-sub   { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+        .nav-sec    { padding: 14px 10px 0; }
+        .nav-lbl    { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; padding: 0 8px; margin-bottom: 5px; }
+        .nav-item   { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; color: var(--muted); font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; margin-bottom: 2px; }
+        .nav-item:hover  { background: var(--surf2); color: var(--text); }
+        .nav-item.active { background: rgba(10,132,255,.18); color: var(--blue); }
+        .nav-icon { width: 20px; text-align: center; font-size: 13px; }
+        .sidebar-footer { margin-top: auto; padding: 14px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+        .seg { display: flex; background: var(--surf2); border-radius: 8px; padding: 3px; border: 1px solid var(--border); }
+        .seg input { display: none; }
+        .seg label { flex: 1; text-align: center; padding: 5px 0; font-size: 12px; font-weight: 500; color: var(--muted); border-radius: 6px; cursor: pointer; transition: all .2s; }
+        .seg input:checked + label { background: var(--blue); color: white; }
+        #sse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); display: inline-block; }
+        #sse-dot.on  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+        #sse-dot.err { background: var(--red); }
+
+        /* ── Main ── */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .topbar { height: 52px; flex-shrink: 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 22px; background: var(--surf); }
+        .topbar-title { font-size: 15px; font-weight: 600; }
+        .topbar-r { display: flex; align-items: center; gap: 10px; }
+        .clock { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+        /* ── Pages ── */
+        .page { display: none; flex: 1; overflow-y: auto; padding: 22px; animation: fi .2s ease; }
+        .page.active { display: flex; flex-direction: column; }
+        @keyframes fi { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+
+        /* ── Stats row ── */
+        .stats-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; margin-bottom: 16px; flex-shrink: 0; }
+        .sc { background: var(--surf); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+        .sc-val { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; }
+        .sc-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+
+        /* ── Map ── */
+        #map { width: 100%; height: 100%; }
+        .map-wrap { flex: 1; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); min-height: 0; position: relative; }
+        /* Mapbox dark style tweak */
+        .mapboxgl-popup-content { background: var(--surf2) !important; color: var(--text) !important; border: 1px solid var(--border) !important; border-radius: 10px !important; padding: 10px 14px !important; }
+        .mapboxgl-popup-tip     { border-top-color: var(--surf2) !important; border-bottom-color: var(--surf2) !important; }
+        .mapboxgl-ctrl-group    { background: var(--surf2) !important; border: 1px solid var(--border) !important; }
+        .mapboxgl-ctrl-group button { background: var(--surf2) !important; }
+        .mapboxgl-ctrl-group button .mapboxgl-ctrl-icon { filter: invert(1); }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1);   opacity: 1; }
+            50%       { transform: scale(1.4); opacity: 0.7; }
+        }
+        /* map controls overlay */
+        #map-legend { position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(19,19,26,.9); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 11px; backdrop-filter: blur(8px); }
+        #map-legend div { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+        #map-legend div:last-child { margin-bottom: 0; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+        /* ── Cards ── */
+        .card { background: var(--surf); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+        .card-t { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 12px; }
+
+        /* ── Incident cards ── */
+        .qi { border: 1px solid var(--border); border-radius: 12px; padding: 13px; margin-bottom: 9px; background: var(--surf2); }
+        .qi.crit   { border-left: 3px solid var(--red); }
+        .qi.mod    { border-left: 3px solid var(--orange); }
+        .qi.low    { border-left: 3px solid var(--yellow); }
+        .qi.res    { border-left: 3px solid var(--green); opacity: .7; }
+
+        /* ── Badges ── */
+        .badge { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+        .b-r  { background: rgba(255,59,48,.2);  color: var(--red);    }
+        .b-o  { background: rgba(255,149,0,.2);  color: var(--orange); }
+        .b-y  { background: rgba(255,214,10,.15);color: var(--yellow); }
+        .b-g  { background: rgba(48,209,88,.15); color: var(--green);  }
+        .b-b  { background: rgba(10,132,255,.2); color: var(--blue);   }
+        .b-p  { background: rgba(191,90,242,.2); color: var(--purple); }
+
+        /* ── Buttons ── */
+        .btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 13px; border-radius: 8px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s; white-space: nowrap; font-family: inherit; }
+        .btn-blue   { background: var(--blue);   color: #fff; }
+        .btn-blue:hover   { background: #2a94ff; }
+        .btn-green  { background: var(--green);  color: #000; }
+        .btn-green:hover  { opacity: .85; }
+        .btn-red    { background: var(--red);    color: #fff; }
+        .btn-red:hover    { opacity: .85; }
+        .btn-ghost  { background: var(--surf2);  color: var(--text); border: 1px solid var(--border); }
+        .btn-ghost:hover  { background: rgba(255,255,255,.06); }
+        .ai-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 20px; background: linear-gradient(135deg,rgba(10,132,255,.25),rgba(191,90,242,.25)); border: 1px solid rgba(191,90,242,.3); color: var(--purple); font-size: 11px; font-weight: 600; cursor: pointer; }
+
+        /* ── Simulator cards ── */
+        .sim-c { background: var(--surf); border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: all .15s; text-align: center; }
+        .sim-c:hover { border-color: rgba(255,255,255,.18); transform: translateY(-2px); }
+
+        /* ── Hospital row ── */
+        .hr { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); }
+        .hr:last-child { border-bottom: none; }
+
+        /* ── Photo modal ── */
+        #photo-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.88); backdrop-filter: blur(8px); z-index: 500; align-items: center; justify-content: center; flex-direction: column; gap: 14px; }
+        #photo-modal.open { display: flex; }
+        #photo-img { max-width: 88vw; max-height: 68vh; border-radius: 12px; border: 1px solid var(--border); }
+        #photo-findings { max-width: 600px; background: var(--surf2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; font-size: 13px; line-height: 1.65; color: var(--text); }
+        #photo-close { position: fixed; top: 18px; right: 22px; background: var(--surf2); border: 1px solid var(--border); color: var(--text); width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+
+        /* ── SNS modal ── */
+        #sns-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.72); backdrop-filter: blur(8px); z-index: 400; align-items: center; justify-content: center; }
+        #sns-modal.open { display: flex; }
+        .mbox { background: var(--surf); border: 1px solid var(--border); border-radius: 16px; padding: 26px; width: 440px; max-width: 95vw; }
+        .mt1  { font-size: 18px; font-weight: 700; margin-bottom: 5px; }
+        .mt2  { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+        .inp  { width: 100%; background: var(--surf2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 13px; outline: none; font-family: inherit; }
+        .inp:focus { border-color: var(--blue); }
+        .inp-lbl { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 5px; display: block; }
+
+        /* ── Toast ── */
+        #toasts { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 600; display: flex; flex-direction: column; gap: 7px; pointer-events: none; }
+        .toast { background: rgba(28,28,38,.96); border: 1px solid var(--border); backdrop-filter: blur(20px); color: var(--text); padding: 9px 16px; border-radius: 30px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 7px; animation: tIn .28s ease, tOut .28s ease 2.5s forwards; }
+        @keyframes tIn  { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:none; } }
+        @keyframes tOut { to   { opacity:0; transform:translateY(-10px); } }
+
+        /* ── Unit marker SVG pulse ── */
+        @keyframes mk-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
+        .unit-moving { animation: mk-pulse .9s ease infinite; }
+    </style>
+</head>
+<body>
+
+<!-- ════  SIDEBAR  ════ -->
+<aside class="sidebar">
+    <div class="logo">
+        <div class="logo-icon"><i class="fa-solid fa-ghost"></i></div>
+        <div><div class="logo-name">NOVA-S</div><div class="logo-sub">Command Center</div></div>
+    </div>
+
+    <div class="nav-sec">
+        <div class="nav-lbl">Operations</div>
+        <div class="nav-item active" onclick="go('p-map',this)">
+            <span class="nav-icon"><i class="fa-solid fa-earth-asia"></i></span> Overview
+        </div>
+        <div class="nav-item" onclick="go('p-fire',this)">
+            <span class="nav-icon" style="color:var(--orange)"><i class="fa-solid fa-fire"></i></span> Fire Operations
+        </div>
+        <div class="nav-item" onclick="go('p-police',this)">
+            <span class="nav-icon" style="color:var(--purple)"><i class="fa-solid fa-shield-halved"></i></span> Police Command
+        </div>
+        <div class="nav-item" onclick="go('p-rescue',this)">
+            <span class="nav-icon" style="color:var(--green)"><i class="fa-solid fa-heart-pulse"></i></span> Medical Rescue
+        </div>
+        <div class="nav-item" onclick="go('p-triage',this)">
+            <span class="nav-icon" style="color:var(--cyan)"><i class="fa-solid fa-brain"></i></span> AI Triage
+        </div>
+    </div>
+    <div class="nav-sec">
+        <div class="nav-lbl">System</div>
+        <div class="nav-item" id="nav-sim" onclick="go('p-sim',this)">
+            <span class="nav-icon" style="color:var(--muted)"><i class="fa-solid fa-sliders"></i></span> Simulator
+        </div>
+    </div>
+
+    <div class="sidebar-footer">
+        <div style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);">
+            <span id="sse-dot"></span><span id="sse-lbl">Connecting…</span>
+        </div>
+        <div>
+            <div style="font-size:10px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.07em;font-weight:600;">Mode</div>
+            <div class="seg">
+                <input type="radio" id="m-live" name="mode" value="live">
+                <label for="m-live">Live</label>
+                <input type="radio" id="m-demo" name="mode" value="demo" checked>
+                <label for="m-demo">Demo</label>
+            </div>
+        </div>
+    </div>
+</aside>
+
+<!-- ════  MAIN  ════ -->
+<div class="main">
+    <div class="topbar">
+        <div class="topbar-title" id="pg-title">Global Overview</div>
+        <div class="topbar-r">
+            <span class="clock" id="clock">00:00:00</span>
+            <button class="btn btn-ghost" onclick="fetchAll()" style="padding:5px 9px;"><i class="fa-solid fa-arrows-rotate fa-sm"></i></button>
+        </div>
+    </div>
+
+    <!-- ── PAGE: OVERVIEW ── -->
+    <div id="p-map" class="page active">
+        <div class="stats-row">
+            <div class="sc"><div class="sc-val" id="s-safe"  style="color:var(--green)">0</div><div class="sc-lbl">Citizens Safe</div></div>
+            <div class="sc"><div class="sc-val" id="s-sos"   style="color:var(--red)">0</div><div class="sc-lbl">Active SOS</div></div>
+            <div class="sc"><div class="sc-val" id="s-haz"   style="color:var(--orange)">0</div><div class="sc-lbl">Hazard Zones</div></div>
+            <div class="sc"><div class="sc-val" id="s-avail" style="color:var(--text)">0</div><div class="sc-lbl">Units Available</div></div>
+            <div class="sc"><div class="sc-val" id="s-disp"  style="color:var(--blue)">0</div><div class="sc-lbl">Dispatched</div></div>
+        </div>
+        <div class="map-wrap">
+            <div id="map"></div>
+
+            <!-- ── Layer toggle panel ── -->
+            <div id="map-legend">
+                <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Map Layers</div>
+
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:6px;">
+                    <input type="checkbox" id="layer-earthquake" checked onchange="toggleLayer('EARTHQUAKE')">
+                    <span class="dot" style="background:#ff3b30"></span> Earthquakes
+                </label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:6px;">
+                    <input type="checkbox" id="layer-tsunami" checked onchange="toggleLayer('TSUNAMI')">
+                    <span class="dot" style="background:#0a84ff"></span> Tsunamis
+                </label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:6px;">
+                    <input type="checkbox" id="layer-flood" checked onchange="toggleLayer('FLOOD')">
+                    <span class="dot" style="background:#64d2ff"></span> Floods
+                </label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:6px;">
+                    <input type="checkbox" id="layer-heatwave" checked onchange="toggleLayer('HEATWAVE')">
+                    <span class="dot" style="background:#ff9500"></span> Heatwaves
+                </label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:6px;">
+                    <input type="checkbox" id="layer-wildfire" checked onchange="toggleLayer('WILDFIRE')">
+                    <span class="dot" style="background:#ff6b00"></span> Wildfires 🔥
+                </label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:6px;">
+                    <input type="checkbox" id="layer-cyclone" checked onchange="toggleLayer('CYCLONE')">
+                    <span class="dot" style="background:#bf5af2"></span> Cyclones 🌀
+                </label>
+
+                <div style="border-top:1px solid var(--border);margin:8px 0;"></div>
+
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:6px;">
+                    <input type="checkbox" id="layer-units" checked onchange="toggleUnitsLayer()">
+                    <span class="dot" style="background:var(--blue)"></span> Responder Units
+                </label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:6px;">
+                    <input type="checkbox" id="layer-citizens" checked onchange="toggleCitizensLayer()">
+                    <span class="dot" style="background:var(--red)"></span> Citizens
+                </label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:6px;">
+                    <input type="checkbox" id="layer-hospitals" checked onchange="toggleHospitalsLayer()">
+                    <span class="dot" style="background:var(--green)"></span> Hospitals
+                </label>
+
+                <div style="border-top:1px solid var(--border);margin:8px 0;"></div>
+                <div id="data-sources" style="font-size:9px;color:var(--muted);line-height:1.6;">
+                    Sources: GDACS · Open-Meteo · NASA FIRMS
+                </div>
+            </div>
+
+            <!-- ── ML severity mini-legend ── -->
+            <div style="position:absolute;bottom:30px;right:10px;z-index:10;background:rgba(19,19,26,.9);border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:10px;backdrop-filter:blur(8px);">
+                <div style="font-weight:700;color:var(--muted);margin-bottom:4px;">ML SEVERITY</div>
+                <div style="display:flex;gap:5px;">
+                    <span class="badge b-y">S1–2 LOW</span>
+                    <span class="badge b-o">S3 MOD</span>
+                    <span class="badge b-r">S4–5 CRIT</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── PAGE: FIRE OPS ── -->
+    <div id="p-fire" class="page">
+        <div style="max-width:1100px;width:100%;margin:0 auto;">
+            <h1 style="font-size:23px;font-weight:700;margin-bottom:4px;">Fire Operations</h1>
+            <p style="color:var(--muted);font-size:13px;margin-bottom:18px;">Structural fires, heatwaves & USAR dispatch.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div class="card" style="overflow-y:auto;max-height:calc(100vh - 220px);"><div class="card-t">Active Incidents</div><div id="q-fire"></div></div>
+                <div class="card" style="overflow-y:auto;max-height:calc(100vh - 220px);"><div class="card-t">Live Dispatch Feed</div><div id="feed-fire"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── PAGE: POLICE ── -->
+    <div id="p-police" class="page">
+        <div style="max-width:1100px;width:100%;margin:0 auto;">
+            <h1 style="font-size:23px;font-weight:700;margin-bottom:4px;">Police Command</h1>
+            <p style="color:var(--muted);font-size:13px;margin-bottom:18px;">Delhi Police stations · real-time patrol positions · evacuation.</p>
+            <!-- Live police station grid -->
+            <div id="police-stations-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:20px;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div class="card" style="overflow-y:auto;max-height:calc(100vh - 220px);"><div class="card-t">Active Incidents</div><div id="q-police"></div></div>
+                <div class="card" style="overflow-y:auto;max-height:calc(100vh - 220px);"><div class="card-t">Live Dispatch Feed</div><div id="feed-police"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── PAGE: MEDICAL ── -->
+    <div id="p-rescue" class="page">
+        <div style="max-width:1300px;width:100%;margin:0 auto;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;">
+                <div>
+                    <h1 style="font-size:23px;font-weight:700;margin-bottom:4px;">Medical Rescue</h1>
+                    <p style="color:var(--muted);font-size:13px;margin:0;">Triage queue, hospital network, & dispatch feed.</p>
+                </div>
+                <button class="btn btn-red" onclick="openSNS()"><i class="fa-solid fa-tower-broadcast"></i> Broadcast SNS</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
+                <div class="card" style="overflow-y:auto;max-height:calc(100vh - 220px);"><div class="card-t">Triage Queue</div><div id="q-rescue"></div></div>
+                <div class="card" style="overflow-y:auto;max-height:calc(100vh - 220px);"><div class="card-t">Hospital Network</div><div id="hosp-list"></div></div>
+                <div class="card" style="overflow-y:auto;max-height:calc(100vh - 220px);"><div class="card-t">Live Dispatch Feed</div><div id="feed-rescue"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── PAGE: AI TRIAGE ── -->
+    <div id="p-triage" class="page">
+        <div style="max-width:960px;width:100%;margin:0 auto;">
+            <h1 style="font-size:23px;font-weight:700;margin-bottom:4px;">AI Triage Queue</h1>
+            <p style="color:var(--muted);font-size:13px;margin-bottom:18px;">Ranked by Bedrock severity score · full AI visual findings.</p>
+            <div id="q-triage"></div>
+        </div>
+    </div>
+
+    <!-- ── PAGE: SIMULATOR ── -->
+    <div id="p-sim" class="page">
+        <div style="max-width:900px;width:100%;margin:0 auto;">
+            <h1 style="font-size:23px;font-weight:700;margin-bottom:4px;">Simulator Center</h1>
+            <p style="color:var(--muted);font-size:13px;margin-bottom:22px;">Inject events · watch units move in real time on the map.</p>
+
+            <h2 style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;">Deploy Responder Units</h2>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px;">
+                <div class="sim-c" onclick="sim('unit_fire')"  ><div style="font-size:26px;">🚒</div><span style="font-size:13px;font-weight:600;">Fire Engine</span><span style="font-size:11px;color:var(--muted);">Appears & moves on map</span></div>
+                <div class="sim-c" onclick="sim('unit_police')"><div style="font-size:26px;">🚔</div><span style="font-size:13px;font-weight:600;">Police Interceptor</span><span style="font-size:11px;color:var(--muted);">Appears & moves on map</span></div>
+                <div class="sim-c" onclick="sim('unit_rescue')"><div style="font-size:26px;">🚑</div><span style="font-size:13px;font-weight:600;">Ambulance</span><span style="font-size:11px;color:var(--muted);">Appears & moves on map</span></div>
+            </div>
+
+            <h2 style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;">Environmental Hazards</h2>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px;">
+                <div class="sim-c" onclick="sim('flood')">     <div style="font-size:26px;">🌊</div><span style="font-size:12px;font-weight:600;">Flash Flood</span>     <span style="font-size:11px;color:var(--muted);">50 mm/h cloudburst</span></div>
+                <div class="sim-c" onclick="sim('earthquake')"> <div style="font-size:26px;">🏔️</div><span style="font-size:12px;font-weight:600;">M6.2 Earthquake</span><span style="font-size:11px;color:var(--muted);">Structural collapse</span></div>
+                <div class="sim-c" onclick="sim('heatwave')">   <div style="font-size:26px;">☀️</div><span style="font-size:12px;font-weight:600;">45°C Heatwave</span>  <span style="font-size:11px;color:var(--muted);">Wildfire risk</span></div>
+                <div class="sim-c" onclick="sim('tsunami')">    <div style="font-size:26px;">🌀</div><span style="font-size:12px;font-weight:600;">Tsunami Alert</span>  <span style="font-size:11px;color:var(--muted);">Coastal evacuation</span></div>
+            </div>
+
+            <div style="display:flex;gap:10px;">
+                <div class="sim-c" style="flex:1;flex-direction:row;justify-content:center;" onclick="sim('sos')">
+                    <span style="font-size:20px;">🆘</span><span style="font-weight:600;color:var(--red);">Inject SOS Signal</span>
+                </div>
+                <div class="sim-c" style="flex:1;flex-direction:row;justify-content:center;" onclick="purge()">
+                    <span style="font-size:20px;">🗑️</span><span style="font-weight:600;color:var(--muted);">Purge All Data</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div><!-- /main -->
+
+<!-- ════  PHOTO MODAL  ════ -->
+<div id="photo-modal">
+    <button id="photo-close" onclick="closePhoto()">✕</button>
+    <img id="photo-img" src="" alt="Disaster Evidence">
+    <div id="photo-findings"></div>
+</div>
+
+<!-- ════  SNS MODAL  ════ -->
+<div id="sns-modal">
+    <div class="mbox">
+        <div class="mt1">Broadcast SNS Emergency Alert</div>
+        <div class="mt2">Dispatches an emergency manifest to all hospitals & first-responders via Amazon SNS.</div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div><label class="inp-lbl">Hazard Type</label>
+                <select id="sns-h" class="inp"><option>FLOOD</option><option>EARTHQUAKE</option><option>TSUNAMI</option><option>HEATWAVE</option><option>UNKNOWN</option></select></div>
+            <div><label class="inp-lbl">Severity</label>
+                <select id="sns-s" class="inp"><option>CRITICAL</option><option>HIGH</option><option>MODERATE</option></select></div>
+            <div><label class="inp-lbl">Estimated Victim Count</label>
+                <input id="sns-v" type="number" class="inp" value="0" min="0"></div>
+            <div><label class="inp-lbl">Additional Details</label>
+                <textarea id="sns-m" class="inp" rows="3" placeholder="Situation details…"></textarea></div>
+        </div>
+        <div style="display:flex;gap:9px;margin-top:18px;">
+            <button class="btn btn-ghost" style="flex:1;" onclick="closeSNS()">Cancel</button>
+            <button class="btn btn-red"   style="flex:1;" onclick="sendSNS()"><i class="fa-solid fa-tower-broadcast"></i> Send Alert</button>
+        </div>
+    </div>
+</div>
+
+<!-- ════  TOASTS  ════ -->
+<div id="toasts"></div>
+
+<!-- ═══════════════════════════════  SCRIPT  ═══════════════════════════════ -->
+<script>
+/* ── constants ── */
+const API  = '';
+const CTR  = { lat: 28.6139, lng: 77.2090 };
+const ZOOM = 11;
+const PAGE_TITLES = { 'p-map':'Global Overview','p-fire':'Fire Operations','p-police':'Police Command','p-rescue':'Medical Rescue','p-triage':'AI Triage','p-sim':'Simulator Center' };
+
+/* ── state ── */
+let gmap = null;                  // Mapbox map object
+let gMarkers = {};                // unit_id → marker element + popup
+let gHazardCircles = [];
+let gRouteLines = [];
+let gCitizenMarkers = [];
+let gHospitalMarkers = [];
+let gIncidentMarkers = [];
+let isDemoMode = false;
+let sseSource  = null;
+let patrolTimer = null;
+
+/* ════════════════════════════════
+   NAV
+════════════════════════════════ */
+function go(id, el) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('pg-title').textContent = PAGE_TITLES[id] || '';
+    if (id === 'p-map' && gmap) gmap.resize();
+    if (id === 'p-police') renderPoliceGrid();
+}
+
+/* ════════════════════════════════
+   CLOCK
+════════════════════════════════ */
+function tick() { document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US',{hour12:false}); }
+
+/* ════════════════════════════════
+   TOAST
+════════════════════════════════ */
+function toast(msg, icon='✅', color='var(--green)') {
+    const w = document.getElementById('toasts');
+    const d = document.createElement('div');
+    d.className = 'toast';
+    d.innerHTML = `<span style="color:${color}">${icon}</span> ${msg}`;
+    w.appendChild(d);
+    setTimeout(() => d.remove(), 2900);
+}
+
+/* ════════════════════════════════
+   MAPBOX INIT
+   Called once Mapbox GL JS is ready
+════════════════════════════════ */
+function initGoogleMap() {   // name kept so existing callers still work
+    gmap = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/dark-v11',
+        center: [CTR.lng, CTR.lat],
+        zoom: ZOOM,
+        attributionControl: false
+    });
+    gmap.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
+    gmap.addControl(new mapboxgl.AttributionControl({ compact: true }));
+
+    gmap.on('load', () => fetchAll());
+}
+
+/* ════════════════════════════════
+   SSE
+════════════════════════════════ */
+function initSSE() {
+    if (sseSource) sseSource.close();
+    const dot = document.getElementById('sse-dot'), lbl = document.getElementById('sse-lbl');
+    sseSource = new EventSource(`${API}/api/admin/events`);
+    sseSource.onopen = () => { dot.className = 'on'; lbl.textContent = 'Live'; };
+    sseSource.onerror = () => { dot.className = 'err'; lbl.textContent = 'Reconnecting…'; };
+    sseSource.onmessage = e => { try { onSSE(JSON.parse(e.data)); } catch(_){} };
+}
+
+function onSSE(ev) {
+    const d = ev.data || {};
+    if (ev.type === 'connected')   return;
+    if (ev.type === 'patrol_tick') { onPatrolTick(d.units || []); return; }
+    if (ev.type === 'dispatch')    { if (d.unit_lat && d.incident_lat) drawRoute(d.unit_lat, d.unit_lon, d.incident_lat, d.incident_lon); fetchAll(); toast('Unit Dispatched','🚨','var(--blue)'); return; }
+    if (ev.type === 'sos')         { fetchAll(); toast('New SOS Signal','🆘','var(--red)'); return; }
+    if (ev.type === 'hazard')      { fetchAll(); toast(`${d.hazard_type||'Hazard'} Detected','⚠️','var(--orange)`); return; }
+    if (ev.type === 'rescued')     { fetchAll(); toast('Citizen Secured','✅'); return; }
+    if (ev.type === 'unit_deployed'){ fetchAll(); toast(`${d.unit_type||'Unit'} Deployed`,'🚒'); return; }
+    if (ev.type === 'broadcast')   { toast('SNS Alert Sent','📡','var(--red)'); return; }
+    fetchAll();
+}
+
+/* ════════════════════════════════
+   PATROL TICK — smooth marker animation
+════════════════════════════════ */
+function onPatrolTick(units) {
+    units.forEach(u => {
+        const mk = gMarkers[u.unit_id];
+        if (mk && mk.marker) animateMarker(mk.marker, u.lat, u.lon);
+    });
+}
+
+function animateMarker(marker, toLat, toLng) {
+    if (!marker.getLngLat) return;
+    const from = marker.getLngLat();
+    const STEPS = 20, DELAY = 50;
+    let step = 0;
+    const interval = setInterval(() => {
+        step++;
+        const lat = from.lat + (toLat - from.lat) * step / STEPS;
+        const lng = from.lng + (toLng - from.lng) * step / STEPS;
+        marker.setLngLat([lng, lat]);
+        if (step >= STEPS) clearInterval(interval);
+    }, DELAY);
+}
+
+/* ════════════════════════════════
+   PATROL TIMER — fires every 4 s in demo mode
+════════════════════════════════ */
+function startPatrol() {
+    if (patrolTimer) clearInterval(patrolTimer);
+    if (!isDemoMode) return;
+    patrolTimer = setInterval(async () => {
+        try { await fetch(`${API}/api/admin/patrol-tick`, { method: 'POST' }); } catch(_){}
+    }, 4000);
+}
+function stopPatrol() { if (patrolTimer) { clearInterval(patrolTimer); patrolTimer = null; } }
+
+/* ════════════════════════════════
+   FETCH ALL
+════════════════════════════════ */
+async function fetchAll() {
+    if (!gmap) return;
+    await fetchUnits();
+    fetchStats();
+    fetchIncidents();
+    fetchCitizens();
+    fetchHazardZones();
+    fetchHospitals();
+}
+
+async function fetchStats() {
+    try {
+        const d = await fetch(`${API}/api/admin/stats`).then(r=>r.json());
+        document.getElementById('s-safe').textContent  = d.citizens_safe + d.citizens_rescued;
+        document.getElementById('s-sos').textContent   = d.active_incidents;
+        document.getElementById('s-haz').textContent   = d.active_hazard_zones;
+        document.getElementById('s-avail').textContent = (d.fire_units+d.police_units+d.rescue_units)-(d.units_dispatched||0);
+        document.getElementById('s-disp').textContent  = d.units_dispatched||0;
+    } catch(_){}
+}
+
+/* ── Units ── */
+async function fetchUnits() {
+    try {
+        const units = await fetch(`${API}/api/admin/units`).then(r=>r.json());
+        window.gUnits = units;
+
+        // Remove stale markers
+        const currentIds = new Set(units.map(u=>u.unit_id));
+        Object.keys(gMarkers).forEach(id => {
+            if (!currentIds.has(id)) { gMarkers[id].el.remove(); if (gMarkers[id].popup) gMarkers[id].popup.remove(); delete gMarkers[id]; }
+        });
+
+        units.forEach(u => {
+            const lat = u.lat, lng = u.lng || u.lon;
+            if (!lat || !lng) return;
+
+            // Pick icon
+            let iconHtml = '';
+            let color = '';
+            if (u.unit_type === 'FIRE')   { iconHtml = '<i class="fa-solid fa-fire"></i>'; color = 'var(--orange)'; }
+            else if (u.unit_type === 'POLICE') { iconHtml = '<i class="fa-solid fa-shield-halved"></i>'; color = 'var(--purple)'; }
+            else { iconHtml = '<i class="fa-solid fa-heart-pulse"></i>'; color = 'var(--green)'; }
+
+            if (gMarkers[u.unit_id]) {
+                if (!patrolTimer) gMarkers[u.unit_id].marker.setLngLat([lng, lat]);
+                gMarkers[u.unit_id].el.style.opacity = u.status === 'DISPATCHED' ? '0.5' : '1';
+            } else {
+                const el = document.createElement('div');
+                el.style.cssText = `width:28px;height:28px;border-radius:50%;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 0 10px ${color};border:2px solid var(--surf2);cursor:pointer;`;
+                el.innerHTML = iconHtml;
+                
+                const popup = new mapboxgl.Popup({ offset: 15, closeButton: false })
+                    .setHTML(`<div style="font-family:Inter;color:#e8e8f0;padding:4px;">
+                        <b style="font-size:13px;">${u.name}</b><br>
+                        <span style="font-size:11px;color:#6b6b80;">Type: ${u.unit_type} · Status: ${u.status}</span>
+                        ${u.station ? `<br><span style="font-size:11px;color:#6b6b80;">${u.station}</span>` : ''}
+                    </div>`);
+                const marker = new mapboxgl.Marker({ element: el }).setLngLat([lng, lat]).setPopup(popup).addTo(gmap);
+                el.addEventListener('click', () => popup.addTo(gmap));
+                gMarkers[u.unit_id] = { el, marker, popup };
+            }
+        });
+        
+        renderDispatchFeeds();
+    } catch(_){}
+}
+
+const RESCUE_OFFICERS = {
+    FIRE: ['Cmdr. Alex (Alpha)', 'Chief Emma (Delta)', 'Officer Ryan (Echo)'],
+    POLICE: ['Officer Sarah (Bravo)', 'Patrol Mike (Echo)', 'Agent James (India)'],
+    RESCUE: ['Medic John (Charlie)', 'Disp. Lisa (Foxtrot)', 'Support Elena (Hotel)']
+};
+
+function renderDispatchFeeds() {
+    const fireFeed = document.getElementById('feed-fire');
+    const policeFeed = document.getElementById('feed-police');
+    const rescueFeed = document.getElementById('feed-rescue');
+    
+    if(!window.gUnits) return;
+    
+    const feedHtml = (units, typeStr) => {
+        const active = units.filter(u => u.status === 'DISPATCHED' || u.status === 'EN_ROUTE');
+        if (active.length === 0) return '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center;">No active dispatches.</div>';
+        
+        return active.map(u => {
+            const officers = RESCUE_OFFICERS[typeStr];
+            let hash = 0; for(let i=0;i<u.unit_id.length;i++) hash += u.unit_id.charCodeAt(i);
+            const officer = officers[hash % officers.length];
+            const color = typeStr==='FIRE'?'var(--orange)':typeStr==='POLICE'?'var(--purple)':'var(--green)';
+            
+            return `<div style="border-left: 3px solid ${color}; background: var(--surf2); padding: 12px; margin-bottom: 8px; border-radius: 8px;">
+                <div style="font-size:10px;font-weight:700;color:${color};letter-spacing:.05em;margin-bottom:4px;">DISPATCH</div>
+                <div style="font-size:13px;font-weight:600;margin-bottom:3px;">Dispatch: ${u.name}</div>
+                <div style="font-size:12px;color:var(--muted);margin-bottom:1px;">Assigned To: <strong style="color:var(--text)">${officer}</strong></div>
+                <div style="font-size:12px;color:var(--muted);">Status: ${u.status === 'DISPATCHED' ? 'En route to target...' : u.status}</div>
+            </div>`;
+        }).join('');
+    };
+
+    if(fireFeed) fireFeed.innerHTML = feedHtml(window.gUnits.filter(u => u.unit_type === 'FIRE'), 'FIRE');
+    if(policeFeed) policeFeed.innerHTML = feedHtml(window.gUnits.filter(u => u.unit_type === 'POLICE'), 'POLICE');
+    if(rescueFeed) rescueFeed.innerHTML = feedHtml(window.gUnits.filter(u => ['AMBULANCE', 'RESCUE', 'MEDICAL'].includes(u.unit_type)), 'RESCUE');
+}
+
+/* ── Citizens ── */
+async function fetchCitizens() {
+    try {
+        const citizens = await fetch(`${API}/api/admin/citizens`).then(r=>r.json());
+        gCitizenMarkers.forEach(m => { m.el.remove(); if (m.popup) m.popup.remove(); });
+        gCitizenMarkers = [];
+        citizens.forEach(c => {
+            const lat = c.lat, lng = c.lng || c.lon;
+            if (!lat || !lng) return;
+            if (!['IN_DANGER','UNDERGOING_RESCUE','RESCUED'].includes(c.status)) return;
+            const colors = { IN_DANGER:'#ff3b30', UNDERGOING_RESCUE:'#ffd60a', RESCUED:'#30d158' };
+            const color = colors[c.status] || '#ff3b30';
+            const el = document.createElement('div');
+            el.style.cssText = `width:14px;height:14px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 8px ${color};cursor:pointer;`;
+            const popup = new mapboxgl.Popup({ offset: 10, closeButton: false })
+                .setHTML(`<div style="font-family:Inter;color:#e8e8f0;padding:4px;"><b>${c.name||'Citizen'}</b><br><span style="font-size:11px;color:${color};">${c.status}</span></div>`);
+            const marker = new mapboxgl.Marker({ element: el }).setLngLat([lng, lat]).setPopup(popup).addTo(gmap);
+            el.addEventListener('click', () => popup.addTo(gmap));
+            gCitizenMarkers.push({ el, marker, popup });
+        });
+    } catch(_){}
+}
+
+/* ── Layer visibility state ── */
+const layerVisible = {
+    EARTHQUAKE: true, TSUNAMI: true, FLOOD: true,
+    HEATWAVE: true, WILDFIRE: true, CYCLONE: true,
+};
+let unitsVisible    = true;
+let citizensVisible = true;
+let hospitalsVisible = true;
+
+function toggleLayer(type) {
+    layerVisible[type] = !layerVisible[type];
+    gHazardCircles.forEach(c => {
+        if (c.hazardType === type) {
+            try {
+                const vis = layerVisible[type] ? 'visible' : 'none';
+                gmap.setLayoutProperty(c.fillId, 'visibility', vis);
+                gmap.setLayoutProperty(c.lineId, 'visibility', vis);
+            } catch(e){}
+        }
+    });
+}
+
+function toggleUnitsLayer() {
+    unitsVisible = !unitsVisible;
+    Object.values(gMarkers).forEach(m => m.el.style.display = unitsVisible ? '' : 'none');
+}
+function toggleCitizensLayer() {
+    citizensVisible = !citizensVisible;
+    gCitizenMarkers.forEach(m => m.el.style.display = citizensVisible ? '' : 'none');
+}
+function toggleHospitalsLayer() {
+    hospitalsVisible = !hospitalsVisible;
+    gHospitalMarkers.forEach(m => m.el.style.display = hospitalsVisible ? '' : 'none');
+}
+
+/* ── Incidents ── */
+async function fetchIncidents() {
+    try {
+        const incidents = await fetch(`${API}/api/admin/incidents`).then(r=>r.json());
+
+        // Clear old incident markers
+        gIncidentMarkers.forEach(m => { m.el.remove(); if (m.popup) m.popup.remove(); });
+        gIncidentMarkers = [];
+
+        // Render incident markers on map
+        incidents.forEach(i => {
+            const lat = i.lat, lng = i.lng || i.lon;
+            if (!lat || !lng || lat === 0) return;
+            const sev = i.severity_score || 0;
+            const color = sev >= 4 ? '#ff3b30' : sev >= 2 ? '#ff9500' : '#ffd60a';
+            const el = document.createElement('div');
+            el.style.cssText = `width:18px;height:18px;border-radius:50%;background:${color};border:2px solid #fff;cursor:pointer;${sev>=4?'animation:pulse 1s infinite;':''}`;
+            const popup = new mapboxgl.Popup({ offset: 12, closeButton: false })
+                .setHTML(`<div style="font-family:Inter;color:#e8e8f0;padding:4px;"><b>${i.hazard_type}</b><br><span style="font-size:11px;color:${color};">S${sev} · ${i.status}</span><br><span style="font-size:11px;color:#6b6b80;">${(i.findings||'').slice(0,80)}</span></div>`);
+            const marker = new mapboxgl.Marker({ element: el }).setLngLat([lng, lat]).setPopup(popup).addTo(gmap);
+            el.addEventListener('click', () => popup.addTo(gmap));
+            gIncidentMarkers.push({ el, marker, popup });
+        });
+
+        // Render queue cards
+        const renderQ = (elId, typeFilter) => {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            const list = typeFilter ? incidents.filter(i => {
+                if (typeFilter === 'FIRE')   return true;
+                if (typeFilter === 'POLICE') return ['FLOOD','EARTHQUAKE','TSUNAMI','UNKNOWN'].includes(i.hazard_type);
+                if (typeFilter === 'RESCUE') return true;
+            }) : incidents;
+            el.innerHTML = list.length ? list.map(i => incCard(i, false)).join('') :
+                '<div style="text-align:center;color:var(--muted);padding:28px 0;font-size:13px;">No active incidents.</div>';
+        };
+        renderQ('q-fire',   'FIRE');
+        renderQ('q-police', 'POLICE');
+        renderQ('q-rescue', 'RESCUE');
+
+        // AI Triage — full findings
+        const el = document.getElementById('q-triage');
+        if (el) el.innerHTML = incidents.length ? incidents.map(i => incCard(i, true)).join('') :
+            '<div style="text-align:center;color:var(--muted);padding:28px 0;font-size:13px;">No incidents in triage.</div>';
+
+    } catch(_){}
+}
+
+/* ── Incident card builder ── */
+function incCard(inc, full) {
+    const id  = inc.id || inc.incident_id;
+    const res = inc.status === 'RESCUED', dis = inc.status === 'DISPATCHED';
+    const sev = inc.severity_score || 0;
+    let cls = 'qi';
+    if (res) cls += ' res'; else if (sev >= 4) cls += ' crit'; else if (sev >= 2) cls += ' mod'; else cls += ' low';
+
+    const sBadge = res  ? '<span class="badge b-g">RESCUED</span>'
+                 : dis  ? '<span class="badge b-o">DISPATCHED</span>'
+                        : '<span class="badge b-r">PENDING</span>';
+    const sevBadge = sev>=4 ? `<span class="badge b-r">S${sev} CRITICAL</span>`
+                   : sev>=2 ? `<span class="badge b-o">S${sev} MODERATE</span>`
+                             : `<span class="badge b-y">S${sev||'?'} LOW</span>`;
+
+    const phone    = inc.phone ? inc.phone.replace(/.(?=.{4})/g,'*') : 'Unknown';
+    const findings = inc.findings || inc.visual_findings || 'Awaiting analysis';
+    const fDisplay = full
+        ? `<div style="font-size:12px;line-height:1.65;color:var(--muted);background:var(--bg);border-radius:8px;padding:10px;margin-top:8px;white-space:pre-wrap;">${findings}</div>`
+        : `<div style="font-size:12px;color:var(--muted);margin-top:4px;">${findings.length>120?findings.slice(0,120)+'…':findings}</div>`;
+
+    let unitSel = '';
+    if (!res && !dis && window.gUnits) {
+        const avail = window.gUnits.filter(u => u.status !== 'DISPATCHED');
+        if (avail.length) {
+            const opts = avail.map(u=>`<option value="${u.unit_id}">${u.name} (${u.unit_type})</option>`).join('');
+            unitSel = `<select id="sel-${id}" class="inp" style="max-width:170px;padding:5px 8px;font-size:11px;">
+                <option value="">Assign unit…</option>${opts}</select>
+                <span class="ai-badge" onclick="aiPick('${id}','sel-${id}')"><i class="fa-solid fa-wand-magic-sparkles fa-xs"></i> AI Pick</span>`;
+        } else unitSel = '<span style="font-size:11px;color:var(--red);">No units available</span>';
+    }
+
+    const photoUrl = inc.photo_url || inc.image_url || '';
+    const photoBtn = photoUrl
+        ? `<button class="btn btn-ghost" style="font-size:11px;padding:5px 10px;" onclick="openPhoto('${photoUrl}','${encodeURIComponent(findings)}')"><i class="fa-solid fa-image fa-xs"></i> View Photo</button>`
+        : '';
+
+    const actionBtn = !res && !dis
+        ? `<button class="btn btn-blue" style="font-size:11px;" onclick="doDispatch('${id}')"><i class="fa-solid fa-truck-fast fa-xs"></i> Dispatch Rescue Unit</button>`
+        : dis
+        ? `<button class="btn btn-green" style="font-size:11px;" onclick="doRescued('${id}')"><i class="fa-solid fa-circle-check fa-xs"></i> Mark Rescued</button>`
+        : '';
+
+    return `<div class="${cls}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+            <div>
+                <div style="font-size:14px;font-weight:600;margin-bottom:2px;">${inc.hazard_type||'UNKNOWN'} — ${phone}</div>
+                <div style="font-size:11px;color:var(--muted);">${inc.lat?`${Number(inc.lat).toFixed(4)}, ${Number(inc.lng||inc.lon||0).toFixed(4)}`:'No coords'} · ${inc.recommended_dispatch||'—'}</div>
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0;">${sevBadge}${sBadge}</div>
+        </div>
+        ${fDisplay}
+        <div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-top:9px;">${unitSel}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-top:7px;">${photoBtn}${actionBtn}</div>
+    </div>`;
+}
+
+/* ── Police grid ── */
+function renderPoliceGrid() {
+    const grid = document.getElementById('police-stations-grid');
+    if (!grid || !window.gUnits) return;
+    const ps = window.gUnits.filter(u => u.unit_type === 'POLICE');
+    grid.innerHTML = ps.map(p => {
+        const statusColor = p.status === 'PATROL' ? 'var(--green)' : p.status === 'DISPATCHED' ? 'var(--orange)' : 'var(--muted)';
+        const statusIcon  = p.status === 'PATROL' ? '🟢' : p.status === 'DISPATCHED' ? '🟠' : '⚪';
+        return `<div style="background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:12px;">
+            <div style="font-size:12px;font-weight:600;margin-bottom:3px;">${p.name}</div>
+            <div style="font-size:10px;color:var(--muted);margin-bottom:5px;">${p.station||''}</div>
+            <div style="font-size:11px;color:${statusColor};">${statusIcon} ${p.status}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:3px;">${Number(p.lat).toFixed(4)}, ${Number(p.lon||p.lng||0).toFixed(4)}</div>
+        </div>`;
+    }).join('');
+}
+
+/* ── AI recommend ── */
+async function aiPick(incId, selId) {
+    try {
+        const d = await fetch(`${API}/api/admin/recommend-unit/${incId}`).then(r=>r.json());
+        if (d.recommended_unit) {
+            document.getElementById(selId).value = d.recommended_unit.unit_id;
+            toast(`AI → ${d.recommended_unit.name} (${d.distance_km} km)`, '🤖', 'var(--purple)');
+        } else toast('No standby units','⚠️','var(--orange)');
+    } catch(_){}
+}
+
+/* ── Dispatch ── */
+async function doDispatch(id) {
+    const sel = document.getElementById(`sel-${id}`);
+    const uid = sel ? sel.value : null;
+    try {
+        await fetch(`${API}/api/admin/dispatch/${id}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: uid ? JSON.stringify({unit_id:uid}) : '{}' });
+    } catch(_){}
+}
+async function doRescued(id) {
+    try { await fetch(`${API}/api/admin/mark-rescued/${id}`, { method:'POST' }); } catch(_){}
+}
+
+/* ── Draw dispatch route ── */
+function drawRoute(fromLat, fromLng, toLat, toLng) {
+    if (!gmap) return;
+    const idx = gmap._layerIdx || (gmap._layerIdx = 1);
+    gmap._layerIdx++;
+    const srcId = `route-src-${idx}`, lineId = `route-line-${idx}`;
+    gmap.addSource(srcId, {
+        type: 'geojson',
+        data: { type:'Feature', geometry:{ type:'LineString', coordinates:[[fromLng,fromLat],[toLat,toLng]] } }
+    });
+    gmap.addLayer({
+        id: lineId, type: 'line', source: srcId,
+        paint: { 'line-color': '#0a84ff', 'line-width': 2.5, 'line-opacity': 0.85, 'line-dasharray': [2, 1] }
+    });
+    gmap._routes = gmap._routes || [];
+    gmap._routes.push({ lineId, srcId });
+    setTimeout(() => {
+        try { gmap.removeLayer(lineId); gmap.removeSource(srcId); } catch(e){}
+        gmap._routes = gmap._routes.filter(r => r.lineId !== lineId);
+    }, 30000);
+}
+
+/* ── Photo modal ── */
+function openPhoto(url, enc) {
+    document.getElementById('photo-img').src = url;
+    try { document.getElementById('photo-findings').textContent = decodeURIComponent(enc); } catch(_){}
+    document.getElementById('photo-modal').classList.add('open');
+}
+function closePhoto() {
+    document.getElementById('photo-modal').classList.remove('open');
+    document.getElementById('photo-img').src = '';
+}
+document.getElementById('photo-modal').addEventListener('click', e => { if (e.target === document.getElementById('photo-modal')) closePhoto(); });
+
+/* ── SNS modal ── */
+function openSNS()  { document.getElementById('sns-modal').classList.add('open'); }
+function closeSNS() { document.getElementById('sns-modal').classList.remove('open'); }
+document.getElementById('sns-modal').addEventListener('click', e => { if (e.target === document.getElementById('sns-modal')) closeSNS(); });
+async function sendSNS() {
+    try {
+        const res = await fetch(`${API}/api/admin/broadcast-hospital`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ hazard_type: document.getElementById('sns-h').value, severity: document.getElementById('sns-s').value, victim_count: parseInt(document.getElementById('sns-v').value)||0, message: document.getElementById('sns-m').value })
+        });
+        if (res.ok) { closeSNS(); toast('SNS Alert dispatched','📡','var(--red)'); }
+    } catch(_){}
+}
+
+/* ── Simulator ── */
+async function sim(type) {
+    try {
+        await fetch(`${API}/api/admin/simulate/${type}`,{method:'POST'});
+        toast('Event simulated','⚡','var(--cyan)');
+        fetchAll();
+    } catch(_){}
+}
+async function purge() {
+    try {
+        await fetch(`${API}/api/admin/clear-demo`,{method:'POST'});
+        gRouteLines.forEach(l => l.setMap(null)); gRouteLines = [];
+        toast('Data purged','🗑️','var(--muted)');
+        fetchAll();
+    } catch(_){}
+}
+
+/* ── Mode toggle ── */
+function syncSimNav() {
+    document.getElementById('nav-sim').style.display = isDemoMode ? '' : 'none';
+    if (isDemoMode) startPatrol(); else stopPatrol();
+}
+
+/* ════════════════════════════════
+   BOOT
+════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', async () => {
+    setInterval(tick, 1000); tick();
+
+    // 1. Fetch config (Mapbox token + mode)
+    let mbToken = '';
+    try {
+        const cfg = await fetch(`${API}/api/admin/config`).then(r=>r.json());
+        mbToken    = cfg.mapbox_token || '';
+        isDemoMode = cfg.demo_mode !== false;
+    } catch(_){}
+
+    // 2. Fallback: read mode from /health
+    if (!mbToken) {
+        try { const h = await fetch(`${API}/health`).then(r=>r.json()); isDemoMode = h.mode === 'demo'; } catch(_){}
+    }
+
+    // 3. Wire mode radios
+    document.querySelectorAll('input[name="mode"]').forEach(r => {
+        r.checked = r.value === (isDemoMode ? 'demo' : 'live');
+        r.addEventListener('change', async e => {
+            isDemoMode = e.target.value === 'demo';
+            try { await fetch(`${API}/api/admin/toggle-mode`,{method:'POST'}); } catch(_){}
+            syncSimNav();
+            toast(`Switched to ${isDemoMode?'Demo':'Live'} Mode`,'🔄','var(--blue)');
+        });
+    });
+    syncSimNav();
+
+    // 4. Init Mapbox
+    if (mbToken) {
+        mapboxgl.accessToken = mbToken;
+        initGoogleMap();
+    } else {
+        alert("No Mapbox token configured.");
+    }
+
+    initSSE();
+    setInterval(fetchAll, 30000); // safety fallback poll
+});
+
+
+</script>
+</body>
+</html>
