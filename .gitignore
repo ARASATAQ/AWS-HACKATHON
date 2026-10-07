@@ -1,7 +1,29 @@
+# Environments
 venv/
+env/
 .env
+.venv
+ENV/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 .pytest_cache/
 .coverage
+htmlcov/
+*.log
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kiro
 .kiro/
